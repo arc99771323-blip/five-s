@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão 5S Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --bg-body: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --success-light: #ecfdf5;
+            --warning: #f59e0b;
+            --warning-light: #fffbeb;
+            --danger: #ef4444;
+            --danger-light: #fef2f2;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: var(--bg-body); color: var(--text-main); padding: 24px; max-width: 1600px; margin: 0 auto; }
+
+        /* TELA DE LOGIN */
+        #login-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            padding: 36px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .login-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .login-logo {
+            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 50%;
+            display: flex;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+        }
+
+        .login-card h2 { font-size: 1.4rem; font-weight: 800; color: var(--text-main); }
+        .login-card p { font-size: 0.88rem; color: var(--text-muted); }
+
+        /* SISTEMA DE NOTIFICAÇÕES TOAST */
+        #toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 10001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            min-width: 300px;
+            max-width: 420px;
+            background: var(--surface);
+            color: var(--text-main);
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+            border-left: 5px solid var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            pointer-events: auto;
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .toast.show { transform: translateX(0); opacity: 1; }
+        .toast-content { display: flex; align-items: center; gap: 10px; flex: 1; }
+        .toast-success { border-left-color: var(--success); }
+        .toast-success .toast-icon { color: var(--success); }
+        .toast-error { border-left-color: var(--danger); }
+        .toast-error .toast-icon { color: var(--danger); }
+        .toast-warning { border-left-color: var(--warning); }
+        .toast-warning .toast-icon { color: var(--warning); }
+        .toast-info { border-left-color: var(--primary); }
+        .toast-info .toast-icon { color: var(--primary); }
+
+        .toast-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            border-radius: 4px;
+            transition: color 0.2s;
+        }
+        .toast-close:hover { color: var(--text-main); }
+
+        /* SPINNER DE CARREGAMENTO */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            gap: 12px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--surface); padding: 18px 28px; border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card); border: 1px solid var(--border); margin-bottom: 24px;
+        }
+
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-icon { 
+            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%); 
+            color: white; padding: 12px; border-radius: var(--radius-md); 
+            display: flex; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+        .brand h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text-main); }
+
+        .user-profile-header { 
+            display: flex; align-items: center; gap: 12px; background: var(--bg-body); 
+            padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border);
+        }
+        .user-info-text { display: flex; flex-direction: column; text-align: right; }
+        .user-info-name { font-size: 0.88rem; font-weight: 700; color: var(--text-main); }
+        .user-info-role { font-size: 0.72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; }
+
+        .tabs-container {
+            display: flex; gap: 8px; background: var(--surface); padding: 8px;
+            border-radius: var(--radius-lg); border: 1px solid var(--border); margin-bottom: 24px;
+            box-shadow: var(--shadow-sm); overflow-x: auto;
+        }
+
+        .tab-button {
+            display: flex; align-items: center; gap: 8px; padding: 10px 22px;
+            border: none; background: transparent; color: var(--text-muted);
+            font-weight: 600; font-size: 0.9rem; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab-button:hover { background: var(--border-light); color: var(--text-main); }
+        .tab-button.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* FILTROS */
+        .filters-card {
+            background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border);
+            padding: 20px 24px; margin-bottom: 24px; box-shadow: var(--shadow-card);
+        }
+        .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .filters-title { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
+        .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+        .filter-group { display: flex; flex-direction: column; gap: 6px; }
+        .filter-group label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .filter-group select, .filter-group input { 
+            padding: 10px 12px; font-size: 0.88rem; border: 1px solid var(--border); 
+            border-radius: var(--radius-sm); background: var(--bg-body); outline: none;
+            transition: all 0.2s; font-weight: 500;
+        }
+        .filter-group select:focus, .filter-group input:focus { border-color: var(--primary); background: white; }
+
+        /* CARDS KPI */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .kpi-card { 
+            background: var(--surface); padding: 22px; border-radius: var(--radius-lg); 
+            border: 1px solid var(--border); box-shadow: var(--shadow-card); 
+            display: flex; flex-direction: column; justify-content: space-between;
+            position: relative; overflow: hidden; transition: transform 0.2s;
+        }
+        .kpi-card:hover { transform: translateY(-3px); }
+        .kpi-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+        .kpi-card.blue::before { background: var(--primary); }
+        .kpi-card.green::before { background: var(--success); }
+        .kpi-card.amber::before { background: var(--warning); }
+        .kpi-card.red::before { background: var(--danger); }
+
+        .kpi-header { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+        .kpi-icon { padding: 10px; border-radius: 50%; display: flex; }
+        .kpi-value { font-size: 2.1rem; font-weight: 800; color: var(--text-main); margin-top: 12px; letter-spacing: -0.03em; }
+        .kpi-footer { font-size: 0.78rem; color: var(--text-muted); margin-top: 8px; font-weight: 500; }
+
+        /* GRÁFICOS & CARDS */
+        .grid-2-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
+        .grid-3-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+
+        .card { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-card); padding: 24px; margin-bottom: 24px; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--border-light); padding-bottom: 14px; }
+        .card-title { display: flex; align-items: center; gap: 10px; }
+        .card-title h2 { font-size: 1.05rem; font-weight: 700; color: var(--text-main); }
+        .card-title i { color: var(--primary); }
+
+        /* RANKING */
+        .ranking-list { display: flex; flex-direction: column; gap: 12px; }
+        .ranking-item { 
+            display: flex; align-items: center; justify-content: space-between; 
+            padding: 12px 16px; background: var(--bg-body); border-radius: var(--radius-md); 
+            border: 1px solid var(--border-light); transition: all 0.2s ease;
+        }
+        .ranking-item:hover { border-color: var(--primary-light); background: white; }
+        .ranking-info { display: flex; align-items: center; gap: 12px; flex: 1; }
+        .ranking-badge { 
+            width: 28px; height: 28px; border-radius: 50%; background: #e2e8f0; color: #475569;
+            font-weight: 800; font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+        }
+        .ranking-item:nth-child(1) .ranking-badge { background: #fef08a; color: #854d0e; }
+        .ranking-item:nth-child(2) .ranking-badge { background: #e2e8f0; color: #334155; }
+        .ranking-item:nth-child(3) .ranking-badge { background: #ffedd5; color: #9a3412; }
+        .ranking-details { flex: 1; margin-right: 16px; }
+        .ranking-name { font-weight: 700; font-size: 0.88rem; color: var(--text-main); }
+        .ranking-bar-bg { height: 6px; width: 100%; background: #e2e8f0; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+        .ranking-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; }
+        .ranking-score { font-weight: 800; font-size: 0.95rem; color: var(--primary); white-space: nowrap; }
+
+        form { display: flex; flex-direction: column; gap: 16px; text-align: left; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 0.82rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+        input, select, textarea { 
+            padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); 
+            font-size: 0.92rem; color: var(--text-main); background: var(--bg-body); outline: none; transition: all 0.2s;
+        }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+        
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border: none; border-radius: var(--radius-sm); font-weight: 700; cursor: pointer; color: white; transition: all 0.2s; font-size: 0.88rem; }
+        .btn:disabled { opacity: 0.65; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+        .btn-secondary { background: #e2e8f0; color: #475569; font-size: 0.8rem; padding: 8px 14px; }
+        .btn-secondary:hover:not(:disabled) { background: #cbd5e1; color: #0f172a; }
+        .btn-success { background: var(--success); }
+        .btn-danger { background: var(--danger); }
+
+        .task-item { background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 12px; }
+        .task-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .date-tag { background: #f1f5f9; color: #475569; font-weight: 600; font-size: 0.75rem; padding: 4px 12px; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; }
+        .badge { font-size: 0.75rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; color: white; }
+        .badge-pending { background: var(--warning); }
+        .badge-review { background: var(--primary); }
+
+        .timeline { position: relative; padding-left: 20px; border-left: 2px solid var(--border); margin-left: 10px; }
+        .timeline-item { position: relative; margin-bottom: 24px; }
+        .timeline-item:last-child { margin-bottom: 0; }
+        .timeline-dot { position: absolute; left: -27px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); border: 2px solid white; box-shadow: 0 0 0 2px var(--border); }
+        .timeline-date { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+        .timeline-title { font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
+        .timeline-desc { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
+        .timeline-details { background: var(--bg-body); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-sm); margin-top: 8px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px; }
+
+        /* PAGINAÇÃO */
+        .pagination-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-light);
+        }
+        .page-number {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-main);
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .page-number:hover { border-color: var(--primary); color: var(--primary); }
+        .page-number.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* LISTAS CADASTRADAS */
+        .registered-list-wrapper { margin-top: 24px; padding-top: 18px; border-top: 1px dashed var(--border); }
+        .registered-list-title { font-size: 0.82rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .registered-items-container { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+        .registered-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg-body); border: 1px solid var(--border-light); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.88rem; }
+        .registered-tag { font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: var(--primary-light); color: var(--primary); text-transform: uppercase; }
+        /* RESPONSIVIDADE MOBILE */
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            
+            header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+                padding: 14px 16px;
+            }
+            .brand { justify-content: space-between; }
+            .user-profile-header {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .user-info-text { text-align: left; }
+
+            .tabs-container {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                padding: 8px;
+                overflow-x: visible;
+            }
+            .tab-button {
+                justify-content: center;
+                padding: 10px 8px;
+                font-size: 0.82rem;
+                white-space: normal;
+                text-align: center;
+            }
+
+            .filters-card { padding: 16px; }
+            .filters-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .filters-header button { width: 100%; justify-content: center; }
+            .filters-grid { grid-template-columns: 1fr; }
+
+            .kpi-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .grid-2-cols, .grid-3-cols {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .card { padding: 16px; margin-bottom: 16px; }
+
+            #toast-container {
+                top: 12px;
+                right: 12px;
+                left: 12px;
+            }
+            .toast {
+                min-width: 0;
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .login-card { padding: 24px 18px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CONTAINER DE TOASTS -->
+    <div id="toast-container"></div>
+
+    <!-- TELA / MODAL DE LOGIN -->
+    <div id="login-screen">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-logo"><i data-lucide="shield-check" style="width: 32px; height: 32px;"></i></div>
+                <h2>Gestão 5S Pro</h2>
+                <p>Acesse com suas credenciais corporativas</p>
+            </div>
+            <form id="form-login">
+                <div class="form-group">
+                    <label for="login-email">E-mail</label>
+                    <input type="email" id="login-email" placeholder="seu.email@empresa.com" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" id="btn-login-submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                    <i data-lucide="log-in" style="width: 18px;"></i> Entrar no Sistema
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- CABEÇALHO COM PERFIL E LOGOUT -->
+    <header>
+        <div class="brand">
+            <div class="brand-icon"><i data-lucide="shield-check"></i></div>
+            <h1>Gestão 5S <span style="color: var(--primary);">CDD Araçatuba</span></h1>
+        </div>
+        <div class="user-profile-header">
+            <div class="user-info-text">
+                <span class="user-info-name" id="header-user-name">Carregando...</span>
+                <span class="user-info-role" id="header-user-role">---</span>
+            </div>
+            <button onclick="fazerLogout()" class="btn btn-secondary" style="padding: 6px 10px;" title="Sair do Sistema">
+                <i data-lucide="log-out" style="width: 16px;"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="tabs-container">
+        <button class="tab-button active" id="btn-tab-dashboard" onclick="trocarAba('aba-dashboard', this)">
+            <i data-lucide="bar-chart-3" style="width: 18px;"></i> Dashboard Gerencial
+        </button>
+        <!-- ABA DE CADASTROS LIBERADA PARA ADMIN E CONFERENTE -->
+        <button class="tab-button admin-conferente-only" id="btn-tab-cadastros" onclick="trocarAba('aba-cadastros', this)">
+            <i data-lucide="folder-plus" style="width: 18px;"></i> Cadastros Base
+        </button>
+        <button class="tab-button" id="btn-tab-operacao" onclick="trocarAba('aba-operacao', this)">
+            <i data-lucide="play-circle" style="width: 18px;"></i> Lançamento & Execução
+        </button>
+        <button class="tab-button admin-conferente-only" id="btn-tab-validacao" onclick="trocarAba('aba-validacao', this)">
+            <i data-lucide="check-square" style="width: 18px;"></i> Validação
+        </button>
+    </div>
+
+    <div id="aba-dashboard" class="tab-content active">
+        <div class="filters-card">
+            <div class="filters-header">
+                <div class="filters-title"><i data-lucide="sliders" style="width: 16px; color: var(--primary);"></i> Filtros de Pesquisa Inteligentes</div>
+                <button type="button" class="btn btn-secondary" onclick="limparFiltros()"><i data-lucide="rotate-ccw" style="width: 14px;"></i> Limpar Filtros</button>
+            </div>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label>Mês</label>
+                    <select id="filtro-mes" onchange="carregarDashboard()">
+                        <option value="">Todos</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Data Específica</label>
+                    <input type="date" id="filtro-data" onchange="carregarDashboard()">
+                </div>
+
+                <div class="filter-group">
+                    <label>Turno</label>
+                    <select id="filtro-turno" onchange="carregarDashboard()">
+                        <option value="">Todos</option>
+                        <option value="A">Turno A</option>
+                        <option value="B">Turno B</option>
+                        <option value="C">Turno C</option>
+                    </select>
+                </div>
+
+                <div class="filter-group admin-conferente-only">
+                    <label>Conferente</label>
+                    <select id="filtro-conferente" onchange="carregarDashboard()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group admin-conferente-only">
+                    <label>Ajudante</label>
+                    <select id="filtro-ajudante" onchange="carregarDashboard()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Área / Setor</label>
+                    <select id="filtro-area" onchange="carregarDashboard()">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Status</label>
+                    <select id="filtro-status" onchange="carregarDashboard()">
+                        <option value="">Todos</option>
+                        <option value="pendente">Pendente</option>
+                        <option value="em_validacao">Em Validação</option>
+                        <option value="concluida">Concluída</option>
+                        <option value="recusada">Recusada</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="kpi-grid">
+            <div class="kpi-card blue">
+                <div class="kpi-header">
+                    <span>TOTAL DE TAREFAS</span>
+                    <div class="kpi-icon" style="background: var(--primary-light); color: var(--primary);"><i data-lucide="layers" style="width:18px;"></i></div>
+                </div>
+                <div class="kpi-value" id="kpi-total">0</div>
+                <div class="kpi-footer">Lançamentos registrados</div>
+            </div>
+
+            <div class="kpi-card green">
+                <div class="kpi-header">
+                    <span>TAXA DE EFICIÊNCIA</span>
+                    <div class="kpi-icon" style="background: var(--success-light); color: var(--success);"><i data-lucide="trending-up" style="width:18px;"></i></div>
+                </div>
+                <div class="kpi-value" id="kpi-eficiencia" style="color: var(--success);">0%</div>
+                <div class="kpi-footer">Aprovações no prazo</div>
+            </div>
+
+            <div class="kpi-card amber">
+                <div class="kpi-header">
+                    <span>EM ANDAMENTO</span>
+                    <div class="kpi-icon" style="background: var(--warning-light); color: var(--warning);"><i data-lucide="clock" style="width:18px;"></i></div>
+                </div>
+                <div class="kpi-value" id="kpi-pendentes" style="color: var(--warning);">0</div>
+                <div class="kpi-footer">Pendentes + Validação</div>
+            </div>
+
+            <div class="kpi-card red">
+                <div class="kpi-header">
+                    <span>AÇÕES RECUSADAS</span>
+                    <div class="kpi-icon" style="background: var(--danger-light); color: var(--danger);"><i data-lucide="alert-circle" style="width:18px;"></i></div>
+                </div>
+                <div class="kpi-value" id="kpi-recusadas" style="color: var(--danger);">0</div>
+                <div class="kpi-footer">Reprovadas na auditoria</div>
+            </div>
+        </div>
+
+        <div class="grid-2-cols" style="margin-bottom: 24px;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i data-lucide="award"></i><h2>Top Performance (Ajudantes)</h2></div>
+                </div>
+                <div class="ranking-list" id="ranking-ajudantes"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i data-lucide="user-check"></i><h2>Engajamento (Conferentes)</h2></div>
+                </div>
+                <div class="ranking-list" id="ranking-conferentes"></div>
+            </div>
+        </div>
+
+        <div class="grid-3-cols" style="margin-bottom: 24px;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i data-lucide="pie-chart"></i><h2 id="titulo-chart-status">Distribuição por Status</h2></div>
+                </div>
+                <div style="height: 280px; position: relative;"><canvas id="chartSensos"></canvas></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i data-lucide="clock-3"></i><h2>Distribuição por Turno</h2></div>
+                </div>
+                <div style="height: 280px; position: relative;"><canvas id="chartTurnos"></canvas></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i data-lucide="bar-chart-2"></i><h2>Status por Setor / Área</h2></div>
+                </div>
+                <div style="height: 280px; position: relative;"><canvas id="chartSetores"></canvas></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="line-chart"></i><h2>Evolução Diária de Lançamentos</h2></div>
+            </div>
+            <div style="height: 250px; position: relative;"><canvas id="chartEvolucao"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i data-lucide="activity"></i><h2>Histórico de Atividades Recentes</h2></div>
+            </div>
+            <div class="timeline" id="timeline-lista"></div>
+            <div class="pagination-container" id="timeline-paginacao"></div>
+        </div>
+    </div>
+
+    <!-- ABA DE CADASTROS LIBERADA PARA ADMIN E CONFERENTE -->
+    <div id="aba-cadastros" class="tab-content admin-conferente-only">
+        <div class="grid-3-cols">
+            <!-- 1. Cadastrar Área: Visível para Admin e Conferente -->
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i data-lucide="building-2"></i><h2>1. Cadastrar Área</h2></div></div>
+                <form id="form-area">
+                    <div class="form-group">
+                        <label>Nome da Área / Setor</label>
+                        <input type="text" id="area-nome" placeholder="Ex: Galpão B" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Cadastrar Área</button>
+                </form>
+
+                <div class="registered-list-wrapper">
+                    <div class="registered-list-title">
+                        <span>Áreas Cadastradas</span>
+                        <span id="qtd-areas-cadastradas" class="registered-tag">0</span>
+                    </div>
+                    <div class="registered-items-container" id="lista-areas-cadastradas"></div>
+                </div>
+            </div>
+
+            <!-- 2. Cadastrar Tarefa: Visível para Admin e Conferente -->
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i data-lucide="file-plus"></i><h2>2. Cadastrar Tarefa</h2></div></div>
+                <form id="form-tarefa-base">
+                    <div class="form-group">
+                        <label>Nome da Tarefa</label>
+                        <input type="text" id="tarefa-nome" placeholder="Ex: Organização de Pallets" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Cadastrar Tarefa</button>
+                </form>
+
+                <div class="registered-list-wrapper">
+                    <div class="registered-list-title">
+                        <span>Tarefas Cadastradas</span>
+                        <span id="qtd-tarefas-cadastradas" class="registered-tag">0</span>
+                    </div>
+                    <div class="registered-items-container" id="lista-tarefas-cadastradas"></div>
+                </div>
+            </div>
+
+            <!-- 3. Cadastrar Usuário: Exclusivo do Admin -->
+            <div class="card admin-only">
+                <div class="card-header"><div class="card-title"><i data-lucide="user-plus"></i><h2>3. Cadastrar Usuário</h2></div></div>
+                <form id="form-ajudante">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="ajudante-nome" placeholder="Ex: Carlos Silva" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="ajudante-email" placeholder="carlos@empresa.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Senha Inicial</label>
+                        <input type="password" id="ajudante-senha" placeholder="Mínimo 6 caracteres" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Papel / Função</label>
+                        <select id="ajudante-papel" required>
+                            <option value="ajudante">Ajudante</option>
+                            <option value="conferente">Conferente</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Turno</label>
+                        <select id="ajudante-turno" required>
+                            <option value="A">Turno A</option>
+                            <option value="B">Turno B</option>
+                            <option value="C">Turno C</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Cadastrar Usuário</button>
+                </form>
+
+                <div class="registered-list-wrapper">
+                    <div class="registered-list-title">
+                        <span>Usuários Cadastrados</span>
+                        <span id="qtd-usuarios-cadastrados" class="registered-tag">0</span>
+                    </div>
+                    <div class="registered-items-container" id="lista-usuarios-cadastrados"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="aba-operacao" class="tab-content">
+        <div class="grid-2-cols">
+            <div class="card admin-conferente-only">
+                <div class="card-header"><div class="card-title"><i data-lucide="send"></i><h2>Lançar Tarefa para Execução</h2></div></div>
+                <form id="form-lancamento">
+                    <div class="form-group">
+                        <label>Selecione a Área</label>
+                        <select id="select-area" required><option value="">Carregando...</option></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Selecione a Tarefa</label>
+                        <select id="select-tarefa" required><option value="">Carregando...</option></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Atribuir ao Ajudante</label>
+                        <select id="select-ajudante" required><option value="">Carregando...</option></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="data-conclusao">Data Limite / Prazo</label>
+                        <input type="date" id="data-conclusao" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Instruções para o Ajudante</label>
+                        <textarea id="instrucoes" rows="2" placeholder="Observações específicas..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary"><i data-lucide="arrow-right-circle"></i> Lançar Tarefa</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i data-lucide="wrench"></i><h2 id="titulo-lista-tarefas">Tarefas Abertas</h2></div></div>
+                <div id="lista-tarefas-ajudante"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="aba-validacao" class="tab-content admin-conferente-only">
+        <div class="card" style="max-width: 600px; margin: 0 auto;">
+            <div class="card-header"><div class="card-title"><i data-lucide="shield-check"></i><h2>Validar Tarefas Concluídas</h2></div></div>
+            <div id="lista-validacao"></div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO DO SUPABASE
+        const SUPABASE_URL = 'https://lybqnwomblopkmyjjkky.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5YnFud29tYmxvcGtteWpqa2t5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MzAwMTYsImV4cCI6MjEwMjIwNjAxNn0.4EEc7aAgjseCUMAtMpGyg8hlyHRK-_KPJ8h_ifRlkaU';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let usuarioAtual = null;
+        let chartStatusInstance = null;
+        let chartTurnosInstance = null;
+        let chartSetoresInstance = null;
+        let chartEvolucaoInstance = null;
+
+        let historicoTarefasGlobal = [];
+        let paginaAtualTimeline = 1;
+        const ITENS_POR_PAGINA_TIMELINE = 3;
+        let realtimeChannel = null;
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showToast(message, type = 'info', duration = 3500) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const iconMap = {
+                success: 'check-circle-2',
+                error: 'alert-circle',
+                warning: 'alert-triangle',
+                info: 'info'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <div class="toast-content">
+                    <i data-lucide="${iconMap[type] || 'info'}" class="toast-icon" style="width: 18px; height: 18px;"></i>
+                    <span>${escapeHtml(message)}</span>
+                </div>
+                <button class="toast-close" onclick="this.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.remove(), 300);">
+                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                </button>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons({ root: toast });
+
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, duration);
+        }
+
+        function formatarDataHora(isoString) {
+            if (!isoString) return 'N/A';
+            const dt = new Date(isoString);
+            if (isNaN(dt.getTime())) return 'N/A';
+            return dt.toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function obterDataLocalISO(isoString) {
+            if (!isoString) return '';
+            const dt = new Date(isoString);
+            if (isNaN(dt.getTime())) return '';
+            const ano = dt.getFullYear();
+            const mes = String(dt.getMonth() + 1).padStart(2, '0');
+            const dia = String(dt.getDate()).padStart(2, '0');
+            return `${ano}-${mes}-${dia}`;
+        }
+
+        // ================= AUTENTICAÇÃO SUPABASE =================
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            
+            // Ouvinte ativo de sessão em tempo real
+            _supabase.auth.onAuthStateChange((event, session) => {
+                if (!session) {
+                    document.getElementById('login-screen').style.display = 'flex';
+                    usuarioAtual = null;
+                }
+            });
+
+            verificarSessao();
+        });
+
+        async function verificarSessao() {
+            const { data: { session } } = await _supabase.auth.getSession();
+            if (session && session.user) {
+                await obterDadosUsuario(session.user.email);
+            } else {
+                document.getElementById('login-screen').style.display = 'flex';
+            }
+        }
+
+        document.getElementById('form-login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const btnSubmit = document.getElementById('btn-login-submit');
+
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Entrando...';
+
+            try {
+                const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+
+                showToast('Login realizado com sucesso!', 'success');
+                await obterDadosUsuario(data.user.email);
+            } catch (err) {
+                console.error(err);
+                showToast('Falha no login: ' + (err.message === 'Invalid login credentials' ? 'Email ou senha inválidos.' : err.message), 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<i data-lucide="log-in" style="width: 18px;"></i> Entrar no Sistema';
+                lucide.createIcons();
+            }
+        });
+
+        async function obterDadosUsuario(email) {
+            try {
+                const { data, error } = await _supabase
+                    .from('ajudantes')
+                    .select('*')
+                    .eq('email', email)
+                    .single();
+
+                if (error || !data) {
+                    showToast('Usuário não encontrado na base operacional.', 'error');
+                    await _supabase.auth.signOut();
+                    return;
+                }
+
+                usuarioAtual = data;
+                document.getElementById('login-screen').style.display = 'none';
+
+                // Atualiza Header
+                document.getElementById('header-user-name').innerText = usuarioAtual.nome;
+                document.getElementById('header-user-role').innerText = usuarioAtual.papel ? usuarioAtual.papel.toUpperCase() : 'AJUDANTE';
+
+                aplicarPermissoesPerfil();
+
+                await carregarAreas();
+                await carregarTarefasBase();
+                await carregarAjudantes();
+                iniciarEscutaRealtime();
+            } catch (err) {
+                console.error('Erro ao buscar dados do perfil:', err);
+                showToast('Erro ao carregar dados do usuário logado.', 'error');
+            }
+        }
+
+        function iniciarEscutaRealtime() {
+            if (realtimeChannel) {
+                _supabase.removeChannel(realtimeChannel);
+            }
+
+            realtimeChannel = _supabase
+                .channel('mudancas-tarefas')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'lancamentos_tarefas'
+                    },
+                    (payload) => {
+                        carregarDashboard();
+                        carregarTarefasAjudante();
+
+                        if (usuarioAtual && usuarioAtual.papel !== 'ajudante') {
+                            carregarTarefasValidacao();
+                        }
+
+                        if (payload.eventType === 'INSERT') {
+                            showToast('Novas tarefas foram lançadas no sistema!', 'info');
+                        } else if (payload.eventType === 'UPDATE' && payload.new.status === 'em_validacao') {
+                            if (usuarioAtual && usuarioAtual.papel !== 'ajudante') {
+                                showToast('Uma tarefa foi enviada para validação!', 'warning');
+                            }
+                        }
+                    }
+                )
+                .subscribe();
+        }
+
+        async function fazerLogout() {
+            try {
+                if (realtimeChannel) {
+                    _supabase.removeChannel(realtimeChannel);
+                    realtimeChannel = null;
+                }
+                await _supabase.auth.signOut();
+                usuarioAtual = null;
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('form-login').reset();
+                showToast('Você saiu do sistema.', 'info');
+            } catch (err) {
+                showToast('Erro ao sair: ' + err.message, 'error');
+            }
+        }
+
+        // ================= CONTROLE DE PERMISSÕES =================
+
+        function aplicarPermissoesPerfil() {
+            if (!usuarioAtual) return;
+            const papel = (usuarioAtual.papel || 'ajudante').toLowerCase();
+
+            const isAdmin = papel === 'admin';
+            const isConferente = papel === 'conferente';
+            const isAjudante = papel === 'ajudante';
+
+            // Elementos visíveis apenas para Admin (Ex: Cadastrar Usuário)
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? '' : 'none';
+            });
+
+            // Elementos visíveis para Admin e Conferente (Ex: Aba Cadastros Base, Lançamento e Validação)
+            document.querySelectorAll('.admin-conferente-only').forEach(el => {
+                el.style.display = (isAdmin || isConferente) ? '' : 'none';
+            });
+
+            if (isAjudante) {
+                document.getElementById('titulo-chart-status').innerText = `Distribuição das Minhas Tarefas`;
+                document.getElementById('titulo-lista-tarefas').innerText = `Minhas Tarefas Abertas`;
+            } else {
+                document.getElementById('titulo-chart-status').innerText = 'Distribuição por Status Geral';
+                document.getElementById('titulo-lista-tarefas').innerText = 'Tarefas Abertas (Visão Geral)';
+            }
+
+            carregarDashboard();
+            carregarTarefasAjudante();
+            if (isAdmin || isConferente) {
+                carregarTarefasValidacao();
+            }
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtro-mes').value = "";
+            document.getElementById('filtro-data').value = "";
+            document.getElementById('filtro-turno').value = "";
+            document.getElementById('filtro-conferente').value = "";
+            document.getElementById('filtro-ajudante').value = "";
+            document.getElementById('filtro-area').value = "";
+            document.getElementById('filtro-status').value = "";
+            carregarDashboard();
+            showToast('Filtros restaurados.', 'info');
+        }
+
+        // ================= DASHBOARD & DADOS =================
+
+        async function carregarDashboard() {
+            if (!usuarioAtual) return;
+
+            let query = _supabase.from('lancamentos_tarefas').select(`
+                id, status, data_limite, created_at, executado_em, validado_em, ajudante_id, area_id, conferente_id, validado_por,
+                areas(id, nome), 
+                tarefas_base(nome), 
+                ajudantes!ajudante_id(id, nome, papel, turno),
+                criador:ajudantes!conferente_id(nome),
+                validador:ajudantes!validado_por(nome)
+            `);
+
+            if (usuarioAtual.papel === 'ajudante') {
+                query = query.eq('ajudante_id', usuarioAtual.id);
+            }
+
+            const { data: tarefas, error } = await query.order('created_at', { ascending: true });
+            if (error) {
+                console.error('Erro ao carregar dashboard:', error.message);
+                showToast('Erro ao atualizar dashboard.', 'error');
+                return;
+            }
+            if (!tarefas) return;
+
+            const mesSel = document.getElementById('filtro-mes').value;
+            const dataSel = document.getElementById('filtro-data').value;
+            const turnoSel = document.getElementById('filtro-turno').value;
+            const conferenteSel = document.getElementById('filtro-conferente').value;
+            const ajudanteSel = document.getElementById('filtro-ajudante').value;
+            const areaSel = document.getElementById('filtro-area').value;
+            const statusSel = document.getElementById('filtro-status').value;
+
+            const tarefasFiltradas = tarefas.filter(t => {
+                if (mesSel) {
+                    const dt = new Date(t.created_at);
+                    if ((dt.getMonth() + 1) !== parseInt(mesSel, 10)) return false;
+                }
+
+                if (dataSel && obterDataLocalISO(t.created_at) !== dataSel) return false;
+                if (turnoSel && t.ajudantes && t.ajudantes.turno !== turnoSel) return false;
+                if (ajudanteSel && String(t.ajudante_id) !== String(ajudanteSel)) return false;
+                if (areaSel && String(t.area_id) !== String(areaSel)) return false;
+                if (statusSel && t.status !== statusSel) return false;
+
+                if (conferenteSel) {
+                    const criou = String(t.conferente_id) === String(conferenteSel);
+                    const validou = String(t.validado_por) === String(conferenteSel);
+                    if (!criou && !validou) return false;
+                }
+
+                return true;
+            });
+
+            let concluidas = 0, pendentes = 0, emValidacao = 0, recusadas = 0;
+            const turnosMap = { 'Turno A': 0, 'Turno B': 0, 'Turno C': 0, 'Sem Turno': 0 };
+            const setoresMap = {};
+            const evolucaoData = {};
+            const rankingAjudantesMap = {};
+            const rankingConferentesMap = {};
+
+            tarefasFiltradas.forEach(t => {
+                if (t.status === 'concluida') concluidas++;
+                else if (t.status === 'pendente') pendentes++;
+                else if (t.status === 'em_validacao') emValidacao++;
+                else if (t.status === 'recusada') recusadas++;
+
+                const turnoAj = t.ajudantes && t.ajudantes.turno ? `Turno ${t.ajudantes.turno}` : 'Sem Turno';
+                if (turnosMap[turnoAj] !== undefined) turnosMap[turnoAj]++;
+                else turnosMap[turnoAj] = 1;
+
+                const nomeSetor = t.areas ? t.areas.nome : 'Sem Setor';
+                if (!setoresMap[nomeSetor]) {
+                    setoresMap[nomeSetor] = { concluidas: 0, pendentes: 0, emValidacao: 0, recusadas: 0 };
+                }
+                
+                if (t.status === 'concluida') setoresMap[nomeSetor].concluidas++;
+                else if (t.status === 'pendente') setoresMap[nomeSetor].pendentes++;
+                else if (t.status === 'em_validacao') setoresMap[nomeSetor].emValidacao++;
+                else if (t.status === 'recusada') setoresMap[nomeSetor].recusadas++;
+
+                const diaLocal = t.created_at ? obterDataLocalISO(t.created_at) : 'N/A';
+                evolucaoData[diaLocal] = (evolucaoData[diaLocal] || 0) + 1;
+
+                const nomeAj = t.ajudantes ? t.ajudantes.nome : 'Desconhecido';
+                if (!rankingAjudantesMap[nomeAj]) rankingAjudantesMap[nomeAj] = { total: 0, concluidas: 0 };
+                rankingAjudantesMap[nomeAj].total++;
+                if (t.status === 'concluida') rankingAjudantesMap[nomeAj].concluidas++;
+
+                const nomeConf = t.criador ? t.criador.nome : 'Sistema';
+                if (!rankingConferentesMap[nomeConf]) rankingConferentesMap[nomeConf] = 0;
+                rankingConferentesMap[nomeConf]++;
+            });
+
+            const total = tarefasFiltradas.length;
+            const taxaEficiencia = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+
+            document.getElementById('kpi-total').innerText = total;
+            document.getElementById('kpi-eficiencia').innerText = `${taxaEficiencia}%`;
+            document.getElementById('kpi-pendentes').innerText = pendentes + emValidacao;
+            document.getElementById('kpi-recusadas').innerText = recusadas;
+
+            renderizarRankings(rankingAjudantesMap, rankingConferentesMap);
+            renderizarGraficoStatus(concluidas, pendentes, emValidacao, recusadas);
+            renderizarGraficoTurnos(turnosMap);
+            renderizarGraficoSetoresCompleto(setoresMap);
+            renderizarGraficoEvolucao(evolucaoData);
+
+            historicoTarefasGlobal = tarefasFiltradas.slice().reverse();
+            paginaAtualTimeline = 1;
+            renderizarTimeline();
+        }
+
+        function renderizarRankings(ajudantesMap, conferentesMap) {
+            const containerAjudantes = document.getElementById('ranking-ajudantes');
+            const containerConferentes = document.getElementById('ranking-conferentes');
+
+            containerAjudantes.innerHTML = '';
+            containerConferentes.innerHTML = '';
+
+            const ajudantesSorted = Object.entries(ajudantesMap)
+                .map(([nome, dados]) => ({ nome, ...dados, taxa: Math.round((dados.concluidas / dados.total) * 100) || 0 }))
+                .sort((a, b) => b.concluidas - a.concluidas)
+                .slice(0, 5);
+
+            if (ajudantesSorted.length === 0) {
+                containerAjudantes.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 8px;">Sem dados disponíveis.</p>';
+            } else {
+                ajudantesSorted.forEach((aj, idx) => {
+                    containerAjudantes.innerHTML += `
+                        <div class="ranking-item">
+                            <div class="ranking-info">
+                                <div class="ranking-badge">${idx + 1}</div>
+                                <div class="ranking-details">
+                                    <div class="ranking-name">${escapeHtml(aj.nome)}</div>
+                                    <div class="ranking-bar-bg"><div class="ranking-bar-fill" style="width: ${aj.taxa}%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="ranking-score">${aj.concluidas} <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">/ ${aj.total}</span></div>
+                        </div>
+                    `;
+                });
+            }
+
+            const conferentesSorted = Object.entries(conferentesMap)
+                .map(([nome, total]) => ({ nome, total }))
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 5);
+
+            if (conferentesSorted.length === 0) {
+                containerConferentes.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 8px;">Sem dados disponíveis.</p>';
+            } else {
+                const maxLancamentos = conferentesSorted[0]?.total || 1;
+                conferentesSorted.forEach((conf, idx) => {
+                    const pct = Math.round((conf.total / maxLancamentos) * 100);
+                    containerConferentes.innerHTML += `
+                        <div class="ranking-item">
+                            <div class="ranking-info">
+                                <div class="ranking-badge">${idx + 1}</div>
+                                <div class="ranking-details">
+                                    <div class="ranking-name">${escapeHtml(conf.nome)}</div>
+                                    <div class="ranking-bar-bg"><div class="ranking-bar-fill" style="width: ${pct}%; background: #6366f1;"></div></div>
+                                </div>
+                            </div>
+                            <div class="ranking-score" style="color: #6366f1;">${conf.total} <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">tarefas</span></div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function renderizarGraficoStatus(concluidas, pendentes, emValidacao, recusadas) {
+            const canvas = document.getElementById('chartSensos');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartStatusInstance) chartStatusInstance.destroy();
+
+            const total = concluidas + pendentes + emValidacao + recusadas;
+
+            const centerTextPlugin = {
+                id: 'centerTextStatus',
+                beforeDraw: (chart) => {
+                    const { width, height, ctx } = chart;
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    ctx.font = '800 24px Plus Jakarta Sans';
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillText(total, width / 2, (height / 2) - 10);
+                    
+                    ctx.font = '600 11px Plus Jakarta Sans';
+                    ctx.fillStyle = '#64748b';
+                    ctx.fillText('TOTAL', width / 2, (height / 2) + 14);
+                    ctx.restore();
+                }
+            };
+
+            chartStatusInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [ChartDataLabels, centerTextPlugin],
+                data: {
+                    labels: ['Concluídas', 'Pendentes', 'Em Validação', 'Recusadas'],
+                    datasets: [{ 
+                        data: [concluidas, pendentes, emValidacao, recusadas], 
+                        backgroundColor: ['#10b981', '#f59e0b', '#6366f1', '#ef4444'],
+                        borderWidth: 3,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    cutout: '74%',
+                    plugins: { 
+                        datalabels: {
+                            color: '#ffffff',
+                            font: { family: 'Plus Jakarta Sans', weight: '700', size: 11 },
+                            formatter: (value) => {
+                                if (!value || total === 0) return '';
+                                return `${Math.round((value / total) * 100)}%`;
+                            }
+                        },
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                usePointStyle: true, 
+                                pointStyle: 'circle', 
+                                padding: 12, 
+                                font: { family: 'Plus Jakarta Sans', weight: '600', size: 11 } 
+                            } 
+                        } 
+                    } 
+                }
+            });
+        }
+
+        function renderizarGraficoTurnos(turnosMap) {
+            const canvas = document.getElementById('chartTurnos');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartTurnosInstance) chartTurnosInstance.destroy();
+
+            const labels = Object.keys(turnosMap);
+            const valores = Object.values(turnosMap);
+            const totalTurnos = valores.reduce((a, b) => a + b, 0);
+
+            chartTurnosInstance = new Chart(ctx, {
+                type: 'doughnut',
+                plugins: [ChartDataLabels],
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: valores,
+                        backgroundColor: ['#4f46e5', '#06b6d4', '#f59e0b', '#94a3b8'],
+                        borderWidth: 3,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '66%',
+                    plugins: {
+                        datalabels: {
+                            color: '#ffffff',
+                            font: { family: 'Plus Jakarta Sans', weight: '700', size: 11 },
+                            formatter: (val) => val > 0 && totalTurnos > 0 ? `${Math.round((val / totalTurnos) * 100)}%` : ''
+                        },
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { 
+                                usePointStyle: true, 
+                                pointStyle: 'circle', 
+                                padding: 12, 
+                                font: { family: 'Plus Jakarta Sans', weight: '600', size: 11 } 
+                            } 
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderizarGraficoSetoresCompleto(setoresMap) {
+            const canvas = document.getElementById('chartSetores');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartSetoresInstance) chartSetoresInstance.destroy();
+
+            const labels = Object.keys(setoresMap);
+
+            chartSetoresInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels.length ? labels : ['Sem dados'],
+                    datasets: [
+                        { label: 'Concluídas', data: labels.map(s => setoresMap[s].concluidas), backgroundColor: '#10b981', borderRadius: 4 },
+                        { label: 'Pendentes', data: labels.map(s => setoresMap[s].pendentes), backgroundColor: '#f59e0b', borderRadius: 4 },
+                        { label: 'Em Validação', data: labels.map(s => setoresMap[s].emValidacao), backgroundColor: '#6366f1', borderRadius: 4 },
+                        { label: 'Recusadas', data: labels.map(s => setoresMap[s].recusadas), backgroundColor: '#ef4444', borderRadius: 4 }
+                    ]
+                },
+                options: { 
+                    indexAxis: 'y',
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        datalabels: { display: false },
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { usePointStyle: true, pointStyle: 'circle', padding: 12, font: { family: 'Plus Jakarta Sans', weight: '600', size: 11 } } 
+                        },
+                        tooltip: {
+                            callbacks: {
+                                footer: (items) => `Total do Setor: ${items.reduce((a, b) => a + b.raw, 0)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' }, 
+                            ticks: { 
+                                stepSize: 1,
+                                font: { family: 'Plus Jakarta Sans', weight: '500', size: 11 }
+                            } 
+                        },
+                        y: { 
+                            stacked: true,
+                            grid: { display: false }, 
+                            ticks: { font: { family: 'Plus Jakarta Sans', weight: '600', size: 11 } } 
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderizarGraficoEvolucao(evolucaoData) {
+            const canvas = document.getElementById('chartEvolucao');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartEvolucaoInstance) chartEvolucaoInstance.destroy();
+
+            const datasOrdenadas = Object.keys(evolucaoData).sort();
+            const labelsFormatadas = datasOrdenadas.map(d => {
+                const parts = d.split('-');
+                return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+            });
+            const quantidades = datasOrdenadas.map(d => evolucaoData[d]);
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.25)');
+            gradient.addColorStop(1, 'rgba(79, 70, 229, 0.0)');
+
+            chartEvolucaoInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labelsFormatadas.length ? labelsFormatadas : ['Sem dados'],
+                    datasets: [{
+                        label: 'Tarefas Lançadas',
+                        data: quantidades,
+                        borderColor: '#4f46e5',
+                        backgroundColor: gradient,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { datalabels: { display: false }, legend: { display: false } },
+                    scales: { 
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { 
+                                font: { family: 'Plus Jakarta Sans', weight: '500', size: 11 },
+                                maxRotation: 0,
+                                minRotation: 0
+                            } 
+                        },
+                        y: { beginAtZero: true, border: { dash: [4, 4] }, grid: { color: '#f1f5f9' }, ticks: { stepSize: 1, font: { family: 'Plus Jakarta Sans', weight: '500' } } } 
+                    }
+                }
+            });
+        }
+
+        function renderizarTimeline() {
+            const container = document.getElementById('timeline-lista');
+            const paginacaoContainer = document.getElementById('timeline-paginacao');
+            container.innerHTML = '';
+            paginacaoContainer.innerHTML = '';
+
+            if (!historicoTarefasGlobal.length) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 12px 0;">Nenhuma atividade registrada.</p>';
+                return;
+            }
+
+            const totalPaginas = Math.ceil(historicoTarefasGlobal.length / ITENS_POR_PAGINA_TIMELINE);
+            if (paginaAtualTimeline > totalPaginas) paginaAtualTimeline = totalPaginas;
+            if (paginaAtualTimeline < 1) paginaAtualTimeline = 1;
+
+            const inicio = (paginaAtualTimeline - 1) * ITENS_POR_PAGINA_TIMELINE;
+            const fim = inicio + ITENS_POR_PAGINA_TIMELINE;
+            const tarefasPagina = historicoTarefasGlobal.slice(inicio, fim);
+
+            tarefasPagina.forEach(t => {
+                let cor = '#f59e0b';
+                let textoStatus = 'Pendente';
+                if (t.status === 'concluida') { cor = '#10b981'; textoStatus = 'Aprovada'; }
+                else if (t.status === 'em_validacao') { cor = '#4f46e5'; textoStatus = 'Em Validação'; }
+                else if (t.status === 'recusada') { cor = '#ef4444'; textoStatus = 'Recusada'; }
+
+                const nomeCriador = t.criador ? t.criador.nome : 'Não identificado';
+                const nomeExecutores = t.ajudantes ? t.ajudantes.nome : 'Sem Responsável';
+                const nomeValidador = t.validador ? t.validador.nome : 'N/A';
+
+                const dataLancamento = formatarDataHora(t.created_at);
+                const dataExecucao = t.executado_em ? formatarDataHora(t.executado_em) : 'Ainda não executada';
+                const dataValidacao = t.validado_em ? formatarDataHora(t.validado_em) : 'Ainda não validada';
+                const prazoFormatado = t.data_limite ? t.data_limite.split('-').reverse().join('/') : 'N/A';
+
+                container.innerHTML += `
+                    <div class="timeline-item">
+                        <div class="timeline-dot" style="background: ${cor};"></div>
+                        <div class="timeline-date"><i data-lucide="calendar" style="width: 12px; display: inline;"></i> Prazo Final: ${escapeHtml(prazoFormatado)}</div>
+                        <div class="timeline-title">${escapeHtml(t.tarefas_base ? t.tarefas_base.nome : 'Tarefa')} <span style="font-size: 0.75rem; color: ${cor}; font-weight: 700;">(${textoStatus})</span></div>
+                        <div class="timeline-desc">Setor: <strong>${escapeHtml(t.areas ? t.areas.nome : 'N/A')}</strong></div>
+                        
+                        <div class="timeline-details">
+                            <div><i data-lucide="user-check" style="width: 12px; display: inline;"></i> <strong>Lançado por:</strong> ${escapeHtml(nomeCriador)} em ${dataLancamento}</div>
+                            <div><i data-lucide="wrench" style="width: 12px; display: inline;"></i> <strong>Resp. Execução:</strong> ${escapeHtml(nomeExecutores)} (Executado em: ${dataExecucao})</div>
+                            ${t.status === 'concluida' || t.status === 'recusada' ? `<div><i data-lucide="shield" style="width: 12px; display: inline;"></i> <strong>Validado por:</strong> ${escapeHtml(nomeValidador)} em ${dataValidacao}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (totalPaginas > 1) {
+                // Seta para Página Anterior
+                const desabilitarAnterior = paginaAtualTimeline === 1 ? 'opacity: 0.5; pointer-events: none;' : '';
+                paginacaoContainer.innerHTML += `
+                    <div class="page-number" style="${desabilitarAnterior}" onclick="mudarPaginaTimeline(${paginaAtualTimeline - 1})" title="Anterior">
+                        <i data-lucide="chevron-left" style="width: 16px;"></i>
+                    </div>
+                `;
+
+                // Cálculo da janela dinâmica (máximo 5 números visíveis)
+                let paginaInicial = Math.max(1, paginaAtualTimeline - 2);
+                let paginaFinal = Math.min(totalPaginas, paginaInicial + 4);
+
+                if (paginaFinal - paginaInicial < 4) {
+                    paginaInicial = Math.max(1, paginaFinal - 4);
+                }
+
+                // Renderiza apenas as 5 páginas calculadas
+                for (let i = paginaInicial; i <= paginaFinal; i++) {
+                    paginacaoContainer.innerHTML += `
+                        <div class="page-number ${i === paginaAtualTimeline ? 'active' : ''}" onclick="mudarPaginaTimeline(${i})">${i}</div>
+                    `;
+                }
+
+                // Seta para Próxima Página
+                const desabilitarProxima = paginaAtualTimeline === totalPaginas ? 'opacity: 0.5; pointer-events: none;' : '';
+                paginacaoContainer.innerHTML += `
+                    <div class="page-number" style="${desabilitarProxima}" onclick="mudarPaginaTimeline(${paginaAtualTimeline + 1})" title="Próxima">
+                        <i data-lucide="chevron-right" style="width: 16px;"></i>
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        function mudarPaginaTimeline(numeroPagina) {
+            paginaAtualTimeline = numeroPagina;
+            renderizarTimeline();
+        }
+
+        // ================= OPERAÇÕES & LISTAGENS =================
+
+        async function carregarTarefasAjudante() {
+            if (!usuarioAtual) return;
+
+            const container = document.getElementById('lista-tarefas-ajudante');
+            container.innerHTML = '<div class="loading-wrapper"><div class="spinner"></div><span>Carregando tarefas...</span></div>';
+
+            try {
+                let query = _supabase
+                    .from('lancamentos_tarefas')
+                    .select(`
+                        id, data_limite, created_at, status, instrucoes, 
+                        areas(nome), 
+                        tarefas_base(nome), 
+                        ajudantes!ajudante_id(nome),
+                        criador:ajudantes!conferente_id(nome)
+                    `)
+                    .eq('status', 'pendente');
+
+                if (usuarioAtual.papel === 'ajudante') {
+                    query = query.eq('ajudante_id', usuarioAtual.id);
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                container.innerHTML = '';
+
+                if (data && data.length > 0) {
+                    data.forEach(t => {
+                        const prazoFormatado = t.data_limite ? t.data_limite.split('-').reverse().join('/') : 'N/A';
+                        const nomeCriador = t.criador ? t.criador.nome : 'Não informado';
+                        const dataLancamento = formatarDataHora(t.created_at);
+
+                        container.innerHTML += `
+                            <div class="task-item">
+                                <div class="task-top">
+                                    <span class="date-tag"><i data-lucide="calendar" style="width: 12px;"></i> Prazo: ${escapeHtml(prazoFormatado)}</span>
+                                    <span class="badge badge-pending">Pendente</span>
+                                </div>
+                                <div class="task-title" style="margin-top: 6px; font-weight: 700;">${escapeHtml(t.tarefas_base ? t.tarefas_base.nome : '')}</div>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 4px 0 2px 0;">Setor: <strong>${escapeHtml(t.areas ? t.areas.nome : 'N/A')}</strong></p>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">Resp: <strong>${escapeHtml(t.ajudantes ? t.ajudantes.nome : 'Sem Responsável')}</strong></p>
+                                <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 5px;">
+                                    <i data-lucide="user-check" style="width: 13px; color: var(--primary);"></i>
+                                    <span>Lançado por: <strong>${escapeHtml(nomeCriador)}</strong> em ${dataLancamento}</span>
+                                </p>
+                                ${t.instrucoes ? `<p style="font-size: 0.8rem; background: var(--bg-body); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px solid var(--border);"><strong>Obs:</strong> ${escapeHtml(t.instrucoes)}</p>` : ''}
+                                
+                                <form onsubmit="concluirTarefa(event, '${escapeHtml(t.id)}')">
+                                    <input type="text" id="obs-${escapeHtml(t.id)}" placeholder="Observação da execução (opcional)...">
+                                    <button type="submit" class="btn btn-success" style="width: 100%; margin-top: 8px;"><i data-lucide="check"></i> Concluir Tarefa</button>
+                                </form>
+                            </div>
+                        `;
+                    });
+                    lucide.createIcons();
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; padding: 12px 0;">Nenhuma tarefa pendente registrada.</p>';
+                }
+            } catch (err) {
+                console.error('Erro ao buscar tarefas:', err.message);
+                container.innerHTML = '<p style="color: var(--danger); font-size: 0.9rem;">Erro ao carregar tarefas.</p>';
+                showToast('Falha ao buscar tarefas abertas.', 'error');
+            }
+        }
+
+        async function carregarTarefasValidacao() {
+            const container = document.getElementById('lista-validacao');
+            container.innerHTML = '<div class="loading-wrapper"><div class="spinner"></div><span>Carregando validações...</span></div>';
+
+            try {
+                const { data, error } = await _supabase
+                    .from('lancamentos_tarefas')
+                    .select(`id, data_limite, created_at, status, obs_execucao, areas(nome), tarefas_base(nome), ajudantes!ajudante_id(nome), criador:ajudantes!conferente_id(nome)`)
+                    .eq('status', 'em_validacao');
+
+                if (error) throw error;
+
+                container.innerHTML = '';
+
+                if (data && data.length > 0) {
+                    data.forEach(t => {
+                        const prazoFormatado = t.data_limite ? t.data_limite.split('-').reverse().join('/') : 'N/A';
+                        const nomeCriador = t.criador ? t.criador.nome : 'Não informado';
+                        const dataLancamento = formatarDataHora(t.created_at);
+
+                        container.innerHTML += `
+                            <div class="task-item">
+                                <div class="task-top">
+                                    <span class="date-tag"><i data-lucide="calendar" style="width: 12px;"></i> Prazo: ${escapeHtml(prazoFormatado)}</span>
+                                    <span class="badge badge-review">Aguardando Validação</span>
+                                </div>
+                                <div class="task-title" style="margin-top: 6px; font-weight: 700;">${escapeHtml(t.tarefas_base ? t.tarefas_base.nome : '')}</div>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Setor: ${escapeHtml(t.areas ? t.areas.nome : '')} | Executado por: <strong>${escapeHtml(t.ajudantes ? t.ajudantes.nome : 'N/A')}</strong></p>
+                                <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="user-check" style="width: 13px; color: var(--primary);"></i>
+                                    <span>Lançado por: <strong>${escapeHtml(nomeCriador)}</strong> em ${dataLancamento}</span>
+                                </p>
+                                ${t.obs_execucao ? `<div style="background: #ffffff; border-left: 3px solid var(--primary); padding: 8px; font-size: 0.85rem; margin: 10px 0;">" ${escapeHtml(t.obs_execucao)} "</div>` : ''}
+                                
+                                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                                    <button type="button" onclick="validarTarefa('${escapeHtml(t.id)}', 'concluida')" class="btn btn-success" style="flex: 1;"><i data-lucide="check"></i> Aprovar</button>
+                                    <button type="button" onclick="validarTarefa('${escapeHtml(t.id)}', 'recusada')" class="btn btn-danger" style="flex: 1;"><i data-lucide="x"></i> Recusar</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    lucide.createIcons();
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem; padding: 12px 0;">Nenhuma tarefa aguardando aprovação.</p>';
+                }
+            } catch (err) {
+                console.error('Erro ao carregar validações:', err.message);
+                container.innerHTML = '<p style="color: var(--danger); font-size: 0.9rem;">Erro ao carregar validações.</p>';
+                showToast('Falha ao buscar tarefas para validação.', 'error');
+            }
+        }
+
+        document.getElementById('form-area').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSubmit = e.target.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            const originalHTML = btnSubmit.innerHTML;
+            btnSubmit.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Cadastrando...';
+
+            const nome = document.getElementById('area-nome').value.trim();
+            try {
+                const { error } = await _supabase.from('areas').insert([{ nome }]);
+                if (error) throw error;
+                showToast('Área cadastrada com sucesso!', 'success');
+                document.getElementById('area-nome').value = '';
+                await carregarAreas();
+            } catch (err) {
+                showToast('Erro ao cadastrar área: ' + err.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = originalHTML;
+                lucide.createIcons();
+            }
+        });
+
+        document.getElementById('form-tarefa-base').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSubmit = e.target.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            const originalHTML = btnSubmit.innerHTML;
+            btnSubmit.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Cadastrando...';
+
+            const nome = document.getElementById('tarefa-nome').value.trim();
+            try {
+                const { error } = await _supabase.from('tarefas_base').insert([{ nome }]);
+                if (error) throw error;
+                showToast('Tarefa cadastrada com sucesso!', 'success');
+                document.getElementById('tarefa-nome').value = '';
+                await carregarTarefasBase();
+            } catch (err) {
+                showToast('Erro ao cadastrar tarefa: ' + err.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = originalHTML;
+                lucide.createIcons();
+            }
+        });
+
+        // 3. Cadastrar Usuário: Integrado com Edge Function para criação no Auth e no Banco
+        document.getElementById('form-ajudante').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSubmit = e.target.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            const originalHTML = btnSubmit.innerHTML;
+            btnSubmit.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Cadastrando...';
+
+            const nome = document.getElementById('ajudante-nome').value.trim();
+            const email = document.getElementById('ajudante-email').value.trim();
+            const password = document.getElementById('ajudante-senha').value;
+            const papel = document.getElementById('ajudante-papel').value;
+            const turno = document.getElementById('ajudante-turno').value;
+
+            try {
+                // Invoca a Edge Function de administração
+                const { data, error } = await _supabase.functions.invoke('cadastrar-usuario', {
+                    body: { nome, email, password, papel, turno }
+                });
+
+                if (error) throw error;
+                if (data?.error) throw new Error(data.error);
+
+                showToast('Usuário criado com sucesso no Auth e no Sistema!', 'success');
+                document.getElementById('form-ajudante').reset();
+                await carregarAjudantes();
+            } catch (err) {
+                showToast('Erro ao cadastrar usuário: ' + err.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = originalHTML;
+                lucide.createIcons();
+            }
+        });
+
+        document.getElementById('form-lancamento').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btnSubmit = e.target.querySelector('button[type="submit"]');
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Lançando...';
+
+            try {
+                const { error } = await _supabase.from('lancamentos_tarefas').insert([{
+                    area_id: document.getElementById('select-area').value,
+                    tarefa_base_id: document.getElementById('select-tarefa').value,
+                    ajudante_id: document.getElementById('select-ajudante').value,
+                    conferente_id: usuarioAtual ? usuarioAtual.id : null,
+                    data_limite: document.getElementById('data-conclusao').value,
+                    instrucoes: document.getElementById('instrucoes').value.trim(),
+                    status: 'pendente'
+                }]);
+
+                if (error) throw error;
+
+                showToast('Tarefa lançada com sucesso!', 'success');
+                document.getElementById('form-lancamento').reset();
+                await carregarTarefasAjudante();
+                await carregarDashboard();
+            } catch (err) {
+                showToast('Erro ao lançar tarefa: ' + err.message, 'error');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<i data-lucide="arrow-right-circle"></i> Lançar Tarefa';
+                lucide.createIcons();
+            }
+        });
+
+        async function concluirTarefa(event, id) {
+            event.preventDefault();
+            const obsInput = document.getElementById(`obs-${id}`);
+            const obs_execucao = obsInput ? obsInput.value.trim() : '';
+
+            try {
+                const { error } = await _supabase.from('lancamentos_tarefas').update({
+                    status: 'em_validacao',
+                    obs_execucao: obs_execucao,
+                    executado_em: new Date().toISOString()
+                }).eq('id', id);
+
+                if (error) throw error;
+                showToast('Tarefa concluída! Enviada para validação.', 'success');
+                await carregarTarefasAjudante();
+                if (usuarioAtual && usuarioAtual.papel !== 'ajudante') {
+                    await carregarTarefasValidacao();
+                }
+                await carregarDashboard();
+            } catch (err) {
+                showToast('Erro ao concluir tarefa: ' + err.message, 'error');
+            }
+        }
+
+        async function validarTarefa(id, novoStatus) {
+            try {
+                const { error } = await _supabase.from('lancamentos_tarefas').update({
+                    status: novoStatus,
+                    validado_por: usuarioAtual ? usuarioAtual.id : null,
+                    validado_em: new Date().toISOString()
+                }).eq('id', id);
+
+                if (error) throw error;
+                const statusTexto = novoStatus === 'concluida' ? 'aprovada' : 'recusada';
+                const toastType = novoStatus === 'concluida' ? 'success' : 'warning';
+                showToast(`Tarefa ${statusTexto} com sucesso!`, toastType);
+
+                await carregarTarefasValidacao();
+                await carregarDashboard();
+            } catch (err) {
+                showToast('Erro ao validar tarefa: ' + err.message, 'error');
+            }
+        }
+
+        async function carregarAreas() {
+            try {
+                const { data, error } = await _supabase.from('areas').select('*').order('nome');
+                if (error) throw error;
+
+                const select = document.getElementById('select-area');
+                const filtroArea = document.getElementById('filtro-area');
+                const listaAreas = document.getElementById('lista-areas-cadastradas');
+                const qtdAreas = document.getElementById('qtd-areas-cadastradas');
+
+                if (data) {
+                    select.innerHTML = '<option value="">Selecione...</option>';
+                    filtroArea.innerHTML = '<option value="">Todas</option>';
+                    if (listaAreas) listaAreas.innerHTML = '';
+                    if (qtdAreas) qtdAreas.innerText = data.length;
+
+                    data.forEach(a => {
+                        select.innerHTML += `<option value="${escapeHtml(a.id)}">${escapeHtml(a.nome)}</option>`;
+                        filtroArea.innerHTML += `<option value="${escapeHtml(a.id)}">${escapeHtml(a.nome)}</option>`;
+                        
+                        if (listaAreas) {
+                            listaAreas.innerHTML += `
+                                <div class="registered-item">
+                                    <div class="registered-item-info">
+                                        <span class="registered-item-name">${escapeHtml(a.nome)}</span>
+                                    </div>
+                                    <span class="registered-tag">Área</span>
+                                </div>
+                            `;
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Erro ao carregar áreas:', err.message);
+                showToast('Falha ao carregar lista de áreas.', 'error');
+            }
+        }
+
+        async function carregarTarefasBase() {
+            try {
+                const { data, error } = await _supabase.from('tarefas_base').select('*').order('nome');
+                if (error) throw error;
+
+                const select = document.getElementById('select-tarefa');
+                const listaTarefas = document.getElementById('lista-tarefas-cadastradas');
+                const qtdTarefas = document.getElementById('qtd-tarefas-cadastradas');
+
+                if (data) {
+                    select.innerHTML = '<option value="">Selecione...</option>';
+                    if (listaTarefas) listaTarefas.innerHTML = '';
+                    if (qtdTarefas) qtdTarefas.innerText = data.length;
+
+                    data.forEach(t => {
+                        select.innerHTML += `<option value="${escapeHtml(t.id)}">${escapeHtml(t.nome)}</option>`;
+                        if (listaTarefas) {
+                            listaTarefas.innerHTML += `
+                                <div class="registered-item">
+                                    <div class="registered-item-info">
+                                        <span class="registered-item-name">${escapeHtml(t.nome)}</span>
+                                    </div>
+                                    <span class="registered-tag">Tarefa</span>
+                                </div>
+                            `;
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Erro ao carregar tarefas base:', err.message);
+                showToast('Falha ao carregar tarefas base.', 'error');
+            }
+        }
+
+        async function carregarAjudantes() {
+            try {
+                const { data, error } = await _supabase.from('ajudantes').select('*').order('nome');
+                if (error) throw error;
+
+                const select = document.getElementById('select-ajudante');
+                const filtroAjudante = document.getElementById('filtro-ajudante');
+                const filtroConferente = document.getElementById('filtro-conferente');
+                const listaUsuarios = document.getElementById('lista-usuarios-cadastrados');
+                const qtdUsuarios = document.getElementById('qtd-usuarios-cadastrados');
+
+                if (data) {
+                    select.innerHTML = '<option value="">Selecione...</option>';
+                    filtroAjudante.innerHTML = '<option value="">Todos</option>';
+                    filtroConferente.innerHTML = '<option value="">Todos</option>';
+                    if (listaUsuarios) listaUsuarios.innerHTML = '';
+                    if (qtdUsuarios) qtdUsuarios.innerText = data.length;
+
+                    data.forEach(aj => {
+                        const papel = (aj.papel || 'ajudante').toLowerCase();
+
+                        if (papel === 'ajudante') {
+                            select.innerHTML += `<option value="${escapeHtml(aj.id)}">${escapeHtml(aj.nome)}</option>`;
+                            filtroAjudante.innerHTML += `<option value="${escapeHtml(aj.id)}">${escapeHtml(aj.nome)}</option>`;
+                        }
+                        
+                        if (papel === 'conferente' || papel === 'admin') {
+                            filtroConferente.innerHTML += `<option value="${escapeHtml(aj.id)}">${escapeHtml(aj.nome)}</option>`;
+                        }
+
+                        if (listaUsuarios) {
+                            const textoTurno = aj.turno ? ` | Turno: ${aj.turno}` : '';
+                            listaUsuarios.innerHTML += `
+                                <div class="registered-item">
+                                    <div class="registered-item-info">
+                                        <span class="registered-item-name">${escapeHtml(aj.nome)}</span>
+                                        <span class="registered-item-sub">${escapeHtml(aj.email || 'Sem email')}${escapeHtml(textoTurno)}</span>
+                                    </div>
+                                    <span class="registered-tag">${escapeHtml(papel)}</span>
+                                </div>
+                            `;
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Erro ao carregar lista de usuários:', err.message);
+                showToast('Falha ao carregar usuários.', 'error');
+            }
+        }
+
+        function trocarAba(idAba, elementoBotao) {
+            document.querySelectorAll('.tab-content').forEach(aba => aba.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(idAba).classList.add('active');
+            elementoBotao.classList.add('active');
+        }
+    </script>
+</body>
+</html>
